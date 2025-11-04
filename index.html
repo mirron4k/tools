@@ -163,8 +163,6 @@
   </div>
 
   <script>
-    // Настройка API: измените URL для вашей серверной авторизации.
-    const AUTH_API_URL = window.AUTH_API_URL || 'https://example.com/api/auth/login';
 
     const form = document.getElementById('login-form');
     const loginEl = document.getElementById('login');
@@ -176,7 +174,10 @@
     const successEl = document.getElementById('success');
     const codeBox = document.getElementById('codeBox');
     const codeEl = document.getElementById('code');
-    const copyBtn = document.getElementById('copyBtn');
+     const copyBtn = document.getElementById('copyBtn');
+     
+     // Работа только с локальным acc.txt
+     let accounts = [];
 
     function show(el, text) {
       if (text) el.textContent = text;
@@ -207,20 +208,76 @@
       return (hex.slice(0, 12)).toUpperCase();
     }
 
-    async function requestCode(login, password, server, remember) {
+    function parseAccTxt(text) {
+      // Форматы строк:
+      // login:password[:server]
+      // login|password|server
+      // Пустые и начинающиеся с # игнорируются
+      const list = [];
+      text.split(/\r?\n/).forEach(line => {
+        const raw = line.trim();
+        if (!raw || raw.startsWith('#')) return;
+        let parts = raw.split('|');
+        if (parts.length < 2) parts = raw.split(':');
+        const [login, password, server] = parts.map(s => (s||'').trim());
+        if (login && password) list.push({ login, password, server: server || '' });
+      });
+      return list;
+    }
+
+    async function tryLoadAccTxt() {
       try {
-        const resp = await fetch(AUTH_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ login, password, server, remember: remember === '1' })
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json().catch(() => ({}));
-        if (data && data.code) return String(data.code);
-        throw new Error('Некорректный ответ сервера');
+        const resp = await fetch('acc.txt', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('not ok');
+        const text = await resp.text();
+        accounts = parseAccTxt(text);
+        if (accounts.length) {
+          const a0 = accounts[0];
+          loginEl.value = a0.login;
+          passEl.value = a0.password;
+          if (a0.server) serverEl.value = a0.server;
+          hide(errorEl);
+          show(successEl, `Загружено аккаунтов: ${accounts.length}`);
+        } else {
+          show(errorEl, 'acc.txt пуст или имеет неверный формат.');
+        }
       } catch (e) {
-        // Вернём null, чтобы вызвать fallback-генерацию кода
-        return null;
+        // Если браузер блокирует чтение из файла, покажем скрытую кнопку выбора файла
+        const pick = document.createElement('input');
+        pick.type = 'file';
+        pick.accept = '.txt';
+        pick.style.display = 'none';
+        document.body.appendChild(pick);
+        const helper = document.createElement('div');
+        helper.className = 'hint';
+        helper.textContent = 'Не удалось автоматически прочитать acc.txt. Выберите файл вручную.';
+        form.insertBefore(helper, form.firstChild);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy-btn';
+        button.textContent = 'Выбрать acc.txt';
+        form.insertBefore(button, helper.nextSibling);
+        button.addEventListener('click', () => pick.click());
+        pick.addEventListener('change', () => {
+          const file = pick.files && pick.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            accounts = parseAccTxt(String(reader.result || ''));
+            if (accounts.length) {
+              const a0 = accounts[0];
+              loginEl.value = a0.login;
+              passEl.value = a0.password;
+              if (a0.server) serverEl.value = a0.server;
+              hide(errorEl);
+              show(successEl, `Загружено аккаунтов: ${accounts.length}`);
+            } else {
+              show(errorEl, 'acc.txt пуст или имеет неверный формат.');
+            }
+          };
+          reader.onerror = () => show(errorEl, 'Ошибка чтения файла acc.txt.');
+          reader.readAsText(file, 'utf-8');
+        });
       }
     }
 
@@ -237,15 +294,22 @@
         return;
       }
 
-      setLoading(true);
-      let code = await requestCode(login, password, server, remember);
-      if (!code) {
-        // оффлайн/заглушка
-        code = await fallbackCode(login, password, server);
-        show(successEl, 'Сервер недоступен — создан локальный код.');
-      } else {
-        show(successEl, 'Успешный вход. Код получен.');
+      // Проверяем, что данные есть в acc.txt
+      if (!accounts.length) {
+        show(errorEl, 'acc.txt не загружен. Положите файл рядом со страницей или выберите его вручную.');
+        return;
       }
+      const found = accounts.some(a => a.login === login && a.password === password && (a.server || '') === (server || ''))
+                 || accounts.some(a => a.login === login && a.password === password && !a.server);
+      if (!found) {
+        show(errorEl, 'Данные не найдены в acc.txt. Проверьте логин/пароль и сервер.');
+        return;
+      }
+
+      setLoading(true);
+      // Локальная генерация кода без API
+      let code = await fallbackCode(login, password, server);
+      show(successEl, 'Успешный вход по acc.txt. Код сгенерирован.');
 
       const formatted = formatCode(code);
       codeEl.textContent = formatted;
@@ -271,11 +335,14 @@
     });
   </script>
   <!--
-    Интеграция со скриптом:
-    1) Откройте эту страницу, выполните вход, получите код.
-    2) Вставьте код в AriesTools при запросе авторизации.
-    3) Можно задать window.AUTH_API_URL до загрузки, чтобы указать ваш API.
-  -->
+     Интеграция со скриптом (acc.txt):
+     1) Положите acc.txt рядом с login.html. Форматы строк:
+        - login:password
+        - login:password:server
+        - login|password|server
+     2) Откройте страницу, при необходимости выберите файл вручную.
+     3) Введите логин/пароль (или используйте префилл), получите код и вставьте в AriesTools.
+   -->
 </body>
 </html>
 
