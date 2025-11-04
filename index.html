@@ -210,6 +210,7 @@
 
     function parseAccTxt(text) {
       // Форматы строк:
+      // login
       // login:password[:server]
       // login|password|server
       // Пустые и начинающиеся с # игнорируются
@@ -218,9 +219,18 @@
         const raw = line.trim();
         if (!raw || raw.startsWith('#')) return;
         let parts = raw.split('|');
-        if (parts.length < 2) parts = raw.split(':');
+        if (parts.length === 1) {
+          // Может быть формат "login" или "login:..."
+          const maybe = raw.split(':');
+          parts = maybe.length > 1 ? maybe : parts;
+        }
         const [login, password, server] = parts.map(s => (s||'').trim());
-        if (login && password) list.push({ login, password, server: server || '' });
+        if (login && password) {
+          list.push({ login, password, server: server || '', loginOnly: false });
+        } else if (login && !password) {
+          // Разрешаем строки только с логином — пароль введёт пользователь вручную
+          list.push({ login, password: '', server: server || '', loginOnly: true });
+        }
       });
       return list;
     }
@@ -234,7 +244,7 @@
         if (accounts.length) {
           const a0 = accounts[0];
           loginEl.value = a0.login;
-          passEl.value = a0.password;
+          passEl.value = a0.password || '';
           if (a0.server) serverEl.value = a0.server;
           hide(errorEl);
           show(successEl, `Загружено аккаунтов: ${accounts.length}`);
@@ -267,7 +277,7 @@
             if (accounts.length) {
               const a0 = accounts[0];
               loginEl.value = a0.login;
-              passEl.value = a0.password;
+              passEl.value = a0.password || '';
               if (a0.server) serverEl.value = a0.server;
               hide(errorEl);
               show(successEl, `Загружено аккаунтов: ${accounts.length}`);
@@ -299,8 +309,13 @@
         show(errorEl, 'acc.txt не загружен. Положите файл рядом со страницей или выберите его вручную.');
         return;
       }
-      const found = accounts.some(a => a.login === login && a.password === password && (a.server || '') === (server || ''))
-                 || accounts.some(a => a.login === login && a.password === password && !a.server);
+      // Валидация: если запись содержит только логин, пароль не проверяем
+      const found = accounts.some(a => {
+        const serverOk = (a.server || '') === (server || '') || !a.server;
+        if (!serverOk) return false;
+        if (a.loginOnly) return a.login === login; // пароль вводит пользователь
+        return a.login === login && a.password === password;
+      });
       if (!found) {
         show(errorEl, 'Данные не найдены в acc.txt. Проверьте логин/пароль и сервер.');
         return;
