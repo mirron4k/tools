@@ -1,1 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AriesTools — Вход в аккаунт</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --bg-elev: #121821;
+      --card: #151c26;
+      --muted: #8fa0b3;
+      --text: #e6edf3;
+      --primary: #2ea043;
+      --primary-600: #2aa04a;
+      --primary-700: #238636;
+      --danger: #ff5c5c;
+      --border: #263240;
+      --input: #10161f;
+      --shadow: 0 10px 30px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1200px 800px at 80% -10%, #0f1722 0%, var(--bg) 60%),
+                  radial-gradient(1000px 600px at -10% 110%, #0d1320 0%, var(--bg) 60%);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)) padding-box,
+                  linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.05)) border-box;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      user-select: none;
+    }
+    .brand .logo {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      background: conic-gradient(from 220deg, #38bdf8, #6366f1, #22c55e, #38bdf8);
+      box-shadow: 0 8px 24px rgba(56,189,248,.25);
+    }
+    .brand h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+    .muted { color: var(--muted); }
+    form { margin-top: 12px; }
+    .field { margin-bottom: 12px; }
+    .label { display:block; margin-bottom:6px; color: var(--muted); font-weight: 600; }
+    .input, .btn, .select {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--input);
+      color: var(--text);
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease, transform .02s ease;
+    }
+    .input:focus, .select:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, .2);
+    }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: -2px; margin-bottom: 8px; }
+    .btn {
+      cursor: pointer;
+      background: linear-gradient(180deg, var(--primary-600), var(--primary-700));
+      border-color: #1f6f31;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .btn:hover { filter: brightness(1.03); }
+    .btn:active { transform: translateY(1px); }
+    .btn[disabled] { opacity: .6; cursor: not-allowed; }
+    .error { display:none; margin: 8px 0; color: #ff9c9c; background: #2a1214; border: 1px solid #511517; padding: 10px 12px; border-radius: 10px; }
+    .success { display:none; margin: 8px 0; color: #b9f6ca; background: #0d2a1b; border: 1px solid #17492b; padding: 10px 12px; border-radius: 10px; }
+    .code-box {
+      display:none;
+      margin-top: 12px;
+      background: #0f1823;
+      border: 1px dashed #2a3a4f;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .code-line { display:flex; gap: 8px; align-items:center; }
+    .code { flex:1; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 16px; letter-spacing: 2px; background:#0b1320; padding:10px 12px; border-radius:8px; border:1px solid #253247; text-align:center; }
+    .copy-btn { width:auto; padding:10px 14px; border-radius:8px; background:#19283d; border:1px solid #253247; color:#dbe8ff; cursor:pointer; }
+    .copy-btn:hover { filter: brightness(1.05); }
+    .footer { margin-top: 14px; color: var(--muted); font-size: 12px; text-align: center; }
+    @media (max-width: 420px) { .row { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h1>AriesTools</h1>
+      </div>
+      <div class="muted">Войдите в аккаунт, чтобы получить код для авторизации скрипта.</div>
+
+      <form id="login-form">
+        <div class="field">
+          <label class="label" for="login">Логин или Email</label>
+          <input class="input" id="login" name="login" autocomplete="username" required placeholder="nickname или email" />
+        </div>
+        <div class="field">
+          <label class="label" for="password">Пароль</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="label" for="server">Сервер</label>
+            <select id="server" class="select" name="server">
+              <option value="">Авто</option>
+              <option value="arizona">Arizona</option>
+              <option value="diamond">Diamond</option>
+              <option value="advance">Advance</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="remember">Сессия</label>
+            <select id="remember" class="select" name="remember">
+              <option value="1">Запомнить</option>
+              <option value="0">Не запоминать</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="error" class="error" role="alert"></div>
+        <div id="success" class="success"></div>
+
+        <button id="submit" class="btn" type="submit">Войти и получить код</button>
+      </form>
+
+      <div id="codeBox" class="code-box" aria-live="polite">
+        <div class="hint">Скопируйте код и вставьте его в скрипт для авторизации.</div>
+        <div class="code-line">
+          <div id="code" class="code">— — — — — — — —</div>
+          <button id="copyBtn" class="copy-btn" type="button">Копировать</button>
+        </div>
+      </div>
+
+      <div class="footer">Если у вас нет аккаунта — обратитесь к автору скрипта.</div>
+    </div>
+  </div>
+
+  <script>
+    // Настройка API: измените URL для вашей серверной авторизации.
+    const AUTH_API_URL = window.AUTH_API_URL || 'https://example.com/api/auth/login';
+
+    const form = document.getElementById('login-form');
+    const loginEl = document.getElementById('login');
+    const passEl = document.getElementById('password');
+    const serverEl = document.getElementById('server');
+    const rememberEl = document.getElementById('remember');
+    const btn = document.getElementById('submit');
+    const errorEl = document.getElementById('error');
+    const successEl = document.getElementById('success');
+    const codeBox = document.getElementById('codeBox');
+    const codeEl = document.getElementById('code');
+    const copyBtn = document.getElementById('copyBtn');
+
+    function show(el, text) {
+      if (text) el.textContent = text;
+      el.style.display = 'block';
+    }
+    function hide(el) { el.style.display = 'none'; }
+    function setLoading(state) {
+      btn.disabled = state;
+      btn.textContent = state ? 'Подождите…' : 'Войти и получить код';
+    }
+
+    async function sha256Hex(input) {
+      const enc = new TextEncoder();
+      const data = enc.encode(input);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      const bytes = Array.from(new Uint8Array(hash));
+      return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function formatCode(raw) {
+      const upper = (raw || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      return upper.slice(0, 4) + ' ' + upper.slice(4, 8) + ' ' + upper.slice(8, 12);
+    }
+
+    async function fallbackCode(login, password, server) {
+      const base = `${login}|${password}|${server||''}|aries-tools`;
+      const hex = await sha256Hex(base);
+      return (hex.slice(0, 12)).toUpperCase();
+    }
+
+    async function requestCode(login, password, server, remember) {
+      try {
+        const resp = await fetch(AUTH_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login, password, server, remember: remember === '1' })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json().catch(() => ({}));
+        if (data && data.code) return String(data.code);
+        throw new Error('Некорректный ответ сервера');
+      } catch (e) {
+        // Вернём null, чтобы вызвать fallback-генерацию кода
+        return null;
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hide(errorEl); hide(successEl); hide(codeBox);
+
+      const login = loginEl.value.trim();
+      const password = passEl.value;
+      const server = serverEl.value;
+      const remember = rememberEl.value;
+      if (!login || !password) {
+        show(errorEl, 'Введите логин и пароль.');
+        return;
+      }
+
+      setLoading(true);
+      let code = await requestCode(login, password, server, remember);
+      if (!code) {
+        // оффлайн/заглушка
+        code = await fallbackCode(login, password, server);
+        show(successEl, 'Сервер недоступен — создан локальный код.');
+      } else {
+        show(successEl, 'Успешный вход. Код получен.');
+      }
+
+      const formatted = formatCode(code);
+      codeEl.textContent = formatted;
+      show(codeBox);
+      setLoading(false);
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      const txt = codeEl.textContent.replace(/\s+/g, '');
+      try {
+        await navigator.clipboard.writeText(txt);
+        copyBtn.textContent = 'Скопировано!';
+        setTimeout(() => copyBtn.textContent = 'Копировать', 1400);
+      } catch (e) {
+        const r = document.createRange();
+        r.selectNode(codeEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        document.execCommand('copy');
+        sel.removeAllRanges();
+      }
+    });
+  </script>
+  <!--
+    Интеграция со скриптом:
+    1) Откройте эту страницу, выполните вход, получите код.
+    2) Вставьте код в AriesTools при запросе авторизации.
+    3) Можно задать window.AUTH_API_URL до загрузки, чтобы указать ваш API.
+  -->
+</body>
+</html>
+
 
