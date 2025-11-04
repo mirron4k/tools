@@ -166,16 +166,6 @@
         </div>
       </div>
 
-      <div class="code-box" id="editBox" style="display:none; margin-top:12px;">
-        <div class="row" style="margin-bottom:10px;">
-          <button id="openAccBtn" class="copy-btn" type="button">Открыть/редактировать acc.txt</button>
-          <button id="saveAccBtn" class="copy-btn" type="button">Сохранить acc.txt</button>
-          <button id="downloadAccBtn" class="copy-btn" type="button" style="display:none;">Скачать обновлённый acc.txt</button>
-        </div>
-        <div class="hint">Редактор acc.txt (одна запись на строку). Форматы: login | login:password[:server] | login|password|server</div>
-        <textarea id="accEditor" style="width:100%; min-height:160px; background:#0b1320; color:#dbe8ff; border:1px solid #253247; border-radius:8px; padding:10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:13px;"></textarea>
-      </div>
-
       <div class="footer">Если у вас нет аккаунта — обратитесь к автору скрипта.</div>
     </div>
   </div>
@@ -194,16 +184,10 @@
     const codeBox = document.getElementById('codeBox');
     const codeEl = document.getElementById('code');
      const copyBtn = document.getElementById('copyBtn');
-    const editBox = document.getElementById('editBox');
-    const accEditor = document.getElementById('accEditor');
-    const openAccBtn = document.getElementById('openAccBtn');
-    const saveAccBtn = document.getElementById('saveAccBtn');
-    const downloadAccBtn = document.getElementById('downloadAccBtn');
      
      // Работа только с локальным acc.txt
      let accounts = [];
     let accTextCache = '';
-    let accHandle = null; // FileSystemFileHandle, если пользователь открыл файл через диалог
 
     function show(el, text) {
       if (text) el.textContent = text;
@@ -309,9 +293,6 @@
               if (a0.server) serverEl.value = a0.server;
               hide(errorEl);
               show(successEl, `Загружено аккаунтов: ${accounts.length}`);
-              // Покажем редактор с содержимым
-              editBox.style.display = 'block';
-              accEditor.value = accTextCache;
             } else {
               show(errorEl, 'acc.txt пуст или имеет неверный формат.');
             }
@@ -322,107 +303,66 @@
       }
     }
 
-    // Открыть через File System Access API для редактирования
-    openAccBtn?.addEventListener('click', async () => {
-      if (!window.showOpenFilePicker) {
-        show(errorEl, 'Браузер не поддерживает прямое редактирование. Используйте выбор файла при автозагрузке.');
-        return;
-      }
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }]
-        });
-        accHandle = handle;
-        const file = await handle.getFile();
-        accTextCache = await file.text();
-        accounts = parseAccTxt(accTextCache);
-        editBox.style.display = 'block';
-        accEditor.value = accTextCache;
-        hide(errorEl);
-        show(successEl, `Открыт файл acc.txt (${accounts.length} записей).`);
-      } catch (e) { /* отменено пользователем */ }
-    });
-
-    // Сохранить назад в acc.txt (если есть доступ к файлу)
-    saveAccBtn?.addEventListener('click', async () => {
-      try {
-        const text = accEditor.value;
-        if (accHandle && accHandle.createWritable) {
-          const writable = await accHandle.createWritable();
-          await writable.write(text);
-          await writable.close();
-          accTextCache = text;
-          accounts = parseAccTxt(text);
-          show(successEl, 'acc.txt сохранён.');
-        } else {
-          // Нет прямого доступа — дадим скачать файл
-          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'acc.txt';
-          document.body.appendChild(a); a.click(); a.remove();
-          URL.revokeObjectURL(url);
-          show(successEl, 'acc.txt подготовлен к скачиванию.');
-        }
-      } catch (e) {
-        show(errorEl, 'Не удалось сохранить acc.txt.');
-      }
-    });
-
-    function updateAccWithCode(login, server, code, ttlSec) {
-      const expiresAt = new Date(Date.now() + ttlSec * 1000);
-      const expIso = expiresAt.toISOString();
-      const lines = (accEditor.value || accTextCache || '').split(/\r?\n/);
+    function buildUpdatedAccText(login, server, code, ttlSec) {
+      const expiresAt = new Date(Date.now() + (ttlSec || 3600) * 1000).toISOString();
+      const lines = (accTextCache || '').split(/\r?\n/);
       let changed = false;
       const updated = lines.map(line => {
         const raw = line.trim();
         if (!raw || raw.startsWith('#')) return line;
-        // извлекаем основную часть до комментариев/маркеров
-        const base = raw.split('|')[0];
-        const base2 = base.split('#')[0];
-        const main = base2.trim();
-        // получить логин из main
-        let lg = main;
-        if (main.includes('|')) lg = main.split('|')[0];
-        if (main.includes(':')) lg = main.split(':')[0];
-        if (lg !== login) return line;
-        // сервер в записи (если есть)
-        let recServer = '';
-        if (main.includes('|')) recServer = (main.split('|')[2]||'').trim();
-        if (main.includes(':')) recServer = (main.split(':')[2]||'').trim();
-        if (recServer && server && recServer !== server) return line;
-        // удалим старые code= и exp=
-        const stripped = raw
+        // базовая часть без меток code/exp
+        const base = raw
           .replace(/\s*\|\s*code=[^|#]+/gi, '')
-          .replace(/\s*\|\s*exp=[^|#]+/gi, '');
-        const result = `${stripped} | code=${code} | exp=${expIso}`.trim();
+          .replace(/\s*\|\s*exp=[^|#]+/gi, '')
+          .trim();
+        // извлечь логин и сервер
+        let recLogin = base, recServer = '';
+        if (base.includes('|')) {
+          const p = base.split('|');
+          recLogin = (p[0]||'').split(':')[0].trim();
+          recServer = (p[2]||'').trim();
+        } else if (base.includes(':')) {
+          const p = base.split(':');
+          recLogin = (p[0]||'').trim();
+          recServer = (p[2]||'').trim();
+        } else {
+          recLogin = base;
+        }
+        if (recLogin !== login) return line;
+        if (recServer && server && recServer !== server) return line;
         changed = true;
-        return result;
+        return `${base} | code=${code} | exp=${expiresAt}`;
       });
       if (!changed) {
-        // если не нашли запись — добавим новую строку с минимальной формой
-        updated.push(`${login}${server? ':' : ''}${server || ''} | code=${code} | exp=${expIso}`.trim());
+        updated.push(`${login}${server? ':'+server : ''} | code=${code} | exp=${expiresAt}`);
       }
-      const newText = updated.join('\n');
-      // показать в редакторе и кэше
-      editBox.style.display = 'block';
-      accEditor.value = newText;
+      return updated.join('\n');
+    }
+
+    async function saveUpdatedAccText(newText) {
       accTextCache = newText;
-      downloadAccBtn.style.display = accHandle ? 'none' : 'inline-block';
-      // если есть доступ к файлу — попробуем автосохранить
-      if (accHandle && accHandle.createWritable) {
-        saveAccBtn.click();
-      } else {
-        // предложить скачать
-        downloadAccBtn.onclick = () => {
-          const blob = new Blob([newText], { type: 'text/plain;charset=utf-8' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'acc.txt';
-          document.body.appendChild(a); a.click(); a.remove();
-          URL.revokeObjectURL(url);
-        };
+      try {
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'acc.txt',
+            types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(newText);
+          await writable.close();
+          show(successEl, 'acc.txt обновлён и сохранён.');
+          return;
+        }
+      } catch (_) {
+        // пойдём на скачивание
       }
+      const blob = new Blob([newText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'acc.txt';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      show(successEl, 'acc.txt обновлён. Файл скачан.');
     }
 
     form.addEventListener('submit', async (e) => {
@@ -433,7 +373,7 @@
       const password = passEl.value;
       const server = serverEl.value;
       const remember = rememberEl.value;
-      const ttlSec = parseInt(ttlEl.value, 10) || 3600;
+      const ttlSec = parseInt(ttlEl?.value || '3600', 10) || 3600;
       if (!login || !password) {
         show(errorEl, 'Введите логин и пароль.');
         return;
@@ -466,8 +406,11 @@
       show(codeBox);
       setLoading(false);
 
-      // Обновляем/вписываем код и срок в acc.txt
-      try { updateAccWithCode(login, server, code, ttlSec); } catch (_) {}
+      // Автообновление acc.txt: добавим code и срок действия, затем сохраним/скачаем файл
+      try {
+        const newText = buildUpdatedAccText(login, server, code, ttlSec);
+        await saveUpdatedAccText(newText);
+      } catch (_) { /* игнорируем ошибки сохранения */ }
     });
 
     copyBtn.addEventListener('click', async () => {
